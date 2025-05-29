@@ -95,47 +95,62 @@ prediction_days = st.sidebar.slider("Days to Predict", 1, 30, 5, help="Number of
 def download_stock_data(ticker, start_date, end_date):
     """Download stock data from Yahoo Finance"""
     try:
-        # Method 1: Try with curl_cffi session
+        # Method 1: Simple yfinance without custom session (most reliable)
         try:
-            session = requests.Session(impersonate="chrome")
-            stock = yf.Ticker(ticker, session=session)
-            
-            # Download the data first
-            data = yf.download(ticker, start=start_date, end=end_date, session=session)
+            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
             
             if data.empty:
                 raise Exception("No data returned from yfinance")
             
-            # Try to get company info
+            # Get company info separately after successful data download
             try:
+                stock = yf.Ticker(ticker)
                 info = stock.info
-                company_name = info.get('longName', ticker) if info else ticker
+                company_name = info.get('longName', ticker) if info and isinstance(info, dict) else ticker
             except:
                 company_name = ticker
                 
             return data, company_name
             
         except Exception as e1:
-            # Method 2: Fallback to standard yfinance without custom session
+            # Method 2: Try with curl_cffi session but handle differently
             try:
-                stock = yf.Ticker(ticker)
-                data = yf.download(ticker, start=start_date, end=end_date)
+                session = requests.Session(impersonate="chrome")
+                
+                # Use session only for download, not for Ticker object
+                data = yf.download(ticker, start=start_date, end=end_date, 
+                                 session=session, progress=False)
                 
                 if data.empty:
-                    raise Exception("No data returned from yfinance fallback")
+                    raise Exception("No data returned from yfinance with session")
                 
-                # Try to get company info
+                # Create ticker object WITHOUT session to avoid the 'name' attribute error
                 try:
+                    stock = yf.Ticker(ticker)  # No session parameter here
                     info = stock.info
-                    company_name = info.get('longName', ticker) if info else ticker
+                    company_name = info.get('longName', ticker) if info and isinstance(info, dict) else ticker
                 except:
                     company_name = ticker
                     
                 return data, company_name
                 
             except Exception as e2:
-                st.error(f"Failed to download data for {ticker}. Error 1: {str(e1)[:100]}... Error 2: {str(e2)[:100]}...")
-                return None, None
+                # Method 3: Fallback with minimal options
+                try:
+                    data = yf.download(ticker, start=start_date, end=end_date, 
+                                     progress=False, threads=False)
+                    
+                    if data.empty:
+                        raise Exception("No data returned from minimal yfinance")
+                    
+                    return data, ticker  # Just return ticker as company name
+                    
+                except Exception as e3:
+                    st.error(f"All methods failed for {ticker}:")
+                    st.error(f"Method 1: {str(e1)[:100]}...")
+                    st.error(f"Method 2: {str(e2)[:100]}...")
+                    st.error(f"Method 3: {str(e3)[:100]}...")
+                    return None, None
                 
     except Exception as e:
         st.error(f"Unexpected error downloading data for {ticker}: {str(e)}")

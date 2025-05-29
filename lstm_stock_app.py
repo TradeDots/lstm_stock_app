@@ -12,7 +12,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 import warnings
-import tensorflow as tf
 warnings.filterwarnings('ignore')
 
 # Set page config

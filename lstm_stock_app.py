@@ -95,31 +95,50 @@ prediction_days = st.sidebar.slider("Days to Predict", 1, 30, 5, help="Number of
 def download_stock_data(ticker, start_date, end_date):
     """Download stock data from Yahoo Finance"""
     try:
-        session = requests.Session(impersonate="chrome")
-        stock = yf.Ticker(ticker, session=session)
-        
-        # Try to get info first to verify the ticker is valid
+        # Method 1: Try with curl_cffi session
         try:
-            info = stock.info
-            if not info:
-                st.error(f"Could not get info for {ticker}")
+            session = requests.Session(impersonate="chrome")
+            stock = yf.Ticker(ticker, session=session)
+            
+            # Download the data first
+            data = yf.download(ticker, start=start_date, end=end_date, session=session)
+            
+            if data.empty:
+                raise Exception("No data returned from yfinance")
+            
+            # Try to get company info
+            try:
+                info = stock.info
+                company_name = info.get('longName', ticker) if info else ticker
+            except:
+                company_name = ticker
+                
+            return data, company_name
+            
+        except Exception as e1:
+            # Method 2: Fallback to standard yfinance without custom session
+            try:
+                stock = yf.Ticker(ticker)
+                data = yf.download(ticker, start=start_date, end=end_date)
+                
+                if data.empty:
+                    raise Exception("No data returned from yfinance fallback")
+                
+                # Try to get company info
+                try:
+                    info = stock.info
+                    company_name = info.get('longName', ticker) if info else ticker
+                except:
+                    company_name = ticker
+                    
+                return data, company_name
+                
+            except Exception as e2:
+                st.error(f"Failed to download data for {ticker}. Error 1: {str(e1)[:100]}... Error 2: {str(e2)[:100]}...")
                 return None, None
-        except Exception as e:
-            st.error(f"Error getting info for {ticker}: {str(e)}")
-            return None, None
-        
-        # Download the data
-        data = yf.download(ticker, start=start_date, end=end_date)
-
-        if data.empty:
-            st.error(f"No data returned for {ticker}")
-            return None, None
-        
-        # Get company info
-        company_name = info.get('longName', ticker)
-        
-        return data, company_name
+                
     except Exception as e:
+        st.error(f"Unexpected error downloading data for {ticker}: {str(e)}")
         return None, None
 
 def prepare_data(data, sequence_length):
